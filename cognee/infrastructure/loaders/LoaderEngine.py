@@ -118,7 +118,6 @@ class LoaderEngine:
     async def load_file(
         self,
         file_path: str,
-        file_stream: Optional[Any],
         preferred_loaders: Optional[List[str]] = None,
         **kwargs,
     ):
