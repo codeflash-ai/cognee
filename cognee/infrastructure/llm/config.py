@@ -180,26 +180,27 @@ class LLMConfig(BaseSettings):
             - dict: A dictionary containing the configuration settings of the LLMConfig
               instance.
         """
+        attrs = self.__dict__
         return {
-            "provider": self.llm_provider,
-            "model": self.llm_model,
-            "endpoint": self.llm_endpoint,
-            "api_key": self.llm_api_key,
-            "api_version": self.llm_api_version,
-            "temperature": self.llm_temperature,
-            "streaming": self.llm_streaming,
-            "max_completion_tokens": self.llm_max_completion_tokens,
-            "transcription_model": self.transcription_model,
-            "graph_prompt_path": self.graph_prompt_path,
-            "rate_limit_enabled": self.llm_rate_limit_enabled,
-            "rate_limit_requests": self.llm_rate_limit_requests,
-            "rate_limit_interval": self.llm_rate_limit_interval,
-            "embedding_rate_limit_enabled": self.embedding_rate_limit_enabled,
-            "embedding_rate_limit_requests": self.embedding_rate_limit_requests,
-            "embedding_rate_limit_interval": self.embedding_rate_limit_interval,
-            "fallback_api_key": self.fallback_api_key,
-            "fallback_endpoint": self.fallback_endpoint,
-            "fallback_model": self.fallback_model,
+            "provider": attrs["llm_provider"],
+            "model": attrs["llm_model"],
+            "endpoint": attrs["llm_endpoint"],
+            "api_key": attrs["llm_api_key"],
+            "api_version": attrs["llm_api_version"],
+            "temperature": attrs["llm_temperature"],
+            "streaming": attrs["llm_streaming"],
+            "max_completion_tokens": attrs["llm_max_completion_tokens"],
+            "transcription_model": attrs["transcription_model"],
+            "graph_prompt_path": attrs["graph_prompt_path"],
+            "rate_limit_enabled": attrs["llm_rate_limit_enabled"],
+            "rate_limit_requests": attrs["llm_rate_limit_requests"],
+            "rate_limit_interval": attrs["llm_rate_limit_interval"],
+            "embedding_rate_limit_enabled": attrs["embedding_rate_limit_enabled"],
+            "embedding_rate_limit_requests": attrs["embedding_rate_limit_requests"],
+            "embedding_rate_limit_interval": attrs["embedding_rate_limit_interval"],
+            "fallback_api_key": attrs["fallback_api_key"],
+            "fallback_endpoint": attrs["fallback_endpoint"],
+            "fallback_model": attrs["fallback_model"],
         }
 
 
