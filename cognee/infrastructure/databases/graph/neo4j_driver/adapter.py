@@ -393,15 +393,13 @@ class Neo4jAdapter(GraphDBInterface):
         """
         serialized_properties = self.serialize_properties(edge_properties)
 
-        query = dedent(
-            f"""\
-            MATCH (from_node :`{BASE_LABEL}`{{id: $from_node}}),
-                  (to_node :`{BASE_LABEL}`{{id: $to_node}})
-            MERGE (from_node)-[r:`{relationship_name}`]->(to_node)
-            ON CREATE SET r += $properties, r.updated_at = timestamp()
-            ON MATCH SET r += $properties, r.updated_at = timestamp()
-            RETURN r
-            """
+        query = (
+            f"MATCH (from_node :`{BASE_LABEL}`{{id: $from_node}}),"
+            f" (to_node :`{BASE_LABEL}`{{id: $to_node}})"
+            f" MERGE (from_node)-[r:`{relationship_name}`]->(to_node)"
+            " ON CREATE SET r += $properties, r.updated_at = timestamp()"
+            " ON MATCH SET r += $properties, r.updated_at = timestamp()"
+            " RETURN r"
         )
 
         params = {
@@ -868,11 +866,11 @@ class Neo4jAdapter(GraphDBInterface):
         serialized_properties = {}
 
         for property_key, property_value in properties.items():
-            if isinstance(property_value, UUID):
+            if type(property_value) is UUID:
                 serialized_properties[property_key] = str(property_value)
                 continue
 
-            if isinstance(property_value, dict):
+            if type(property_value) is dict:
                 serialized_properties[property_key] = json.dumps(property_value, cls=JSONEncoder)
                 continue
 
