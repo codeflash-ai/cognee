@@ -239,29 +239,35 @@ async def get_default_tasks(  # TODO: Find out a better way to do this (Boris's 
     config: Config = None,
     custom_prompt: Optional[str] = None,
 ) -> list[Task]:
-    if config is None:
+    if not hasattr(get_default_tasks, "_max_chunk_tokens"):
+        get_default_tasks._max_chunk_tokens = get_max_chunk_tokens()
+
+    if not hasattr(get_default_tasks, "_cached_config"):
         ontology_config = get_ontology_env_config()
         if (
             ontology_config.ontology_file_path
             and ontology_config.ontology_resolver
             and ontology_config.matching_strategy
         ):
-            config: Config = {
+            get_default_tasks._cached_config = {
                 "ontology_config": {
                     "ontology_resolver": get_ontology_resolver_from_env(**ontology_config.to_dict())
                 }
             }
         else:
-            config: Config = {
+            get_default_tasks._cached_config = {
                 "ontology_config": {"ontology_resolver": get_default_ontology_resolver()}
             }
+
+    if config is None:
+        config = get_default_tasks._cached_config
 
     default_tasks = [
         Task(classify_documents),
         Task(check_permissions_on_dataset, user=user, permissions=["write"]),
         Task(
             extract_chunks_from_documents,
-            max_chunk_size=chunk_size or get_max_chunk_tokens(),
+            max_chunk_size=chunk_size or get_default_tasks._max_chunk_tokens,
             chunker=chunker,
         ),  # Extract text chunks based on the document type.
         Task(
