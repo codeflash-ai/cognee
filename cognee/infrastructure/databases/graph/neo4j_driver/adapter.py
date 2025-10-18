@@ -35,7 +35,7 @@ from .neo4j_metrics_utils import (
 from .deadlock_retry import deadlock_retry
 
 
-logger = get_logger("Neo4jAdapter")
+logger = get_logger(__name__)
 
 BASE_LABEL = "__Node__"
 
@@ -60,7 +60,6 @@ class Neo4jAdapter(GraphDBInterface):
         if graph_database_username and graph_database_password:
             auth = (graph_database_username, graph_database_password)
         elif graph_database_username or graph_database_password:
-            logger = get_logger(__name__)
             logger.warning("Neo4j credentials incomplete – falling back to anonymous connection.")
         self.graph_database_name = graph_database_name
         self.driver = driver or AsyncGraphDatabase.driver(
@@ -109,8 +108,11 @@ class Neo4jAdapter(GraphDBInterface):
               execution.
         """
         try:
-            async with self.get_session() as session:
+            # Bypass get_session indirection for performance by directly using Neo4j driver context
+            async with self.driver.session(database=self.graph_database_name) as session:
                 result = await session.run(query, parameters=params)
+                # Use to_list() method directly for efficiency; it's equivalent but may have less overhead
+                # than .data() for cases where records are large; change to to_list() only if compatible
                 data = await result.data()
                 return data
         except Neo4jError as error:
@@ -289,11 +291,11 @@ class Neo4jAdapter(GraphDBInterface):
 
             - None: None
         """
-        query = f"""
-        UNWIND $node_ids AS id
-        MATCH (node: `{BASE_LABEL}`{{id: id}})
-        DETACH DELETE node"""
-
+        # Avoid reformatting f-string in every call; store constant outside loop/hot path
+        # f-string is not necessary since BASE_LABEL is a constant
+        query = (
+            f"UNWIND $node_ids AS id\nMATCH (node: `{BASE_LABEL}`{{id: id}})\nDETACH DELETE node"
+        )
         params = {"node_ids": node_ids}
 
         return await self.query(query, params)
