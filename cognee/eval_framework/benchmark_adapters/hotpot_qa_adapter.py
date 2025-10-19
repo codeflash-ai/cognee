@@ -25,17 +25,23 @@ class HotpotQAAdapter(BaseBenchmarkAdapter):
     def _get_golden_context(self, item: dict[str, Any]) -> str:
         """Extracts and formats the golden context from supporting facts."""
         # Create a mapping of title to sentences for easy lookup
-        context_dict = {title: sentences for (title, sentences) in item["context"]}
+        context = item["context"]
+        context_dict = dict(context)  # dict() is faster than a dict-comp for this format
 
-        # Get all supporting facts in order
-        golden_contexts = []
-        for title, sentence_idx in item["supporting_facts"]:
-            sentences = context_dict.get(title, [])
-            if not self._is_valid_supporting_fact(sentences, sentence_idx):
+        supporting_facts = item["supporting_facts"]
+        golden_contexts_append = []  # reuse local for .append
+
+        # The hot path: avoid multiple lookups and function calls when possible
+        for title, sentence_idx in supporting_facts:
+            sentences = context_dict.get(title)
+            # Short-circuit: skip if not found or not valid
+            if not (
+                sentences and isinstance(sentence_idx, int) and 0 <= sentence_idx < len(sentences)
+            ):
                 continue
-            golden_contexts.append(f"{title}: {sentences[sentence_idx]}")
+            golden_contexts_append.append(f"{title}: {sentences[sentence_idx]}")
 
-        return "\n".join(golden_contexts)
+        return "\n".join(golden_contexts_append)
 
     def _get_raw_corpus(self) -> List[dict[str, Any]]:
         """Loads the raw corpus data from file or URL and returns it as a list of dictionaries."""
