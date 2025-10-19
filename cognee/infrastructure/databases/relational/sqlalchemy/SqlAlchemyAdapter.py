@@ -29,43 +29,20 @@ class SQLAlchemyAdapter:
     functions.
     """
 
-    def __init__(self, connection_string: str):
-        self.db_path: str = None
-        self.db_uri: str = connection_string
-
-        if "sqlite" in connection_string:
-            [prefix, db_path] = connection_string.split("///")
-            self.db_path = db_path
-
-            if "s3://" in self.db_path:
-                db_dir_path = path.dirname(self.db_path)
-                file_storage = get_file_storage(db_dir_path)
-
-                run_sync(file_storage.ensure_directory_exists())
-
-                with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
-                    self.temp_db_file = temp_file.name
-                    connection_string = prefix + "///" + self.temp_db_file
-
-                run_sync(self.pull_from_s3())
-
-        if "sqlite" in connection_string:
-            self.engine = create_async_engine(
-                connection_string,
-                poolclass=NullPool,
-                connect_args={"timeout": 30},
-            )
-        else:
-            self.engine = create_async_engine(
-                connection_string,
-                pool_size=20,
-                max_overflow=20,
-                pool_recycle=280,
-                pool_pre_ping=True,
-                pool_timeout=280,
-            )
-
-        self.sessionmaker = async_sessionmaker(bind=self.engine, expire_on_commit=False)
+    def __init__(
+        self,
+        db_uri: str,
+        engine,
+        sessionmaker,
+        db_path: Optional[str] = None,
+        temp_db_file: Optional[str] = None,
+    ):
+        self.db_uri = db_uri
+        self.engine = engine
+        self.sessionmaker = sessionmaker
+        self.db_path = db_path
+        if temp_db_file:
+            self.temp_db_file = temp_db_file
 
     async def push_to_s3(self) -> None:
         if os.getenv("STORAGE_BACKEND", "").lower() == "s3" and hasattr(self, "temp_db_file"):
@@ -88,8 +65,7 @@ class SQLAlchemyAdapter:
         """
         Provide an asynchronous context manager for obtaining a database session.
         """
-        async_session_maker = self.sessionmaker
-        async with async_session_maker() as session:
+        async with self.sessionmaker() as session:
             try:
                 yield session
             finally:
@@ -648,3 +624,63 @@ class SQLAlchemyAdapter:
                                     )
 
             return schema
+
+    @classmethod
+    async def create(cls, connection_string: str):
+        """
+        Async factory to safely initialize all resources without blocking the event loop.
+        """
+        db_path: Optional[str] = None
+        temp_db_file: Optional[str] = None
+        connection_string_actual = connection_string
+
+        if "sqlite" in connection_string:
+            prefix, db_path = connection_string.split("///")
+            # S3-based SQLite requires async init
+            if "s3://" in db_path:
+                db_dir_path = path.dirname(db_path)
+                file_storage = get_file_storage(db_dir_path)
+
+                # Ensure directory exists in a thread to avoid blocking the event loop
+                await asyncio.to_thread(file_storage.ensure_directory_exists, "")
+
+                with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
+                    temp_db_file = temp_file.name
+                    connection_string_actual = prefix + "///" + temp_db_file
+
+                # Pull from S3 should be awaited (IO-bound blocking), dispatch to thread
+                await asyncio.to_thread(
+                    cls._pull_from_s3_static, file_storage, db_path, temp_db_file
+                )
+
+        if "sqlite" in connection_string:
+            engine = create_async_engine(
+                connection_string_actual,
+                poolclass=NullPool,
+                connect_args={"timeout": 30},
+            )
+        else:
+            engine = create_async_engine(
+                connection_string_actual,
+                pool_size=20,
+                max_overflow=20,
+                pool_recycle=280,
+                pool_pre_ping=True,
+                pool_timeout=280,
+            )
+
+        sessionmaker_instance = async_sessionmaker(bind=engine, expire_on_commit=False)
+        return cls(
+            db_uri=connection_string_actual,
+            engine=engine,
+            sessionmaker=sessionmaker_instance,
+            db_path=db_path,
+            temp_db_file=temp_db_file,
+        )
+
+    @staticmethod
+    def _pull_from_s3_static(file_storage, db_path, temp_db_file):
+        try:
+            file_storage.storage.s3.get(db_path, temp_db_file, recursive=True)
+        except FileNotFoundError:
+            pass
