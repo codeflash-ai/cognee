@@ -50,7 +50,7 @@ class HotpotQAAdapter(BaseBenchmarkAdapter):
             raw_corpus = response.json()
 
             with open(filename, "w", encoding="utf-8") as f:
-                json.dump(raw_corpus, f, ensure_ascii=False, indent=4)
+                json.dump(raw_corpus, f, ensure_ascii=False, indent=None, separators=(",", ":"))
 
         return raw_corpus
 
