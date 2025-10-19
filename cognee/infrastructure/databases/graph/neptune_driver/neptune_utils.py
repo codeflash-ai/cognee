@@ -10,6 +10,9 @@ from urllib.parse import urlparse
 
 from cognee.shared.logging_utils import get_logger
 
+# Precompile the regex pattern once at module level for performance.
+_pattern: re.Pattern = re.compile(r"^[a-z]{2,3}-[a-z]+-\d+$")
+
 logger = get_logger("NeptuneUtils")
 
 
@@ -94,9 +97,8 @@ def validate_aws_region(region: str) -> bool:
     if not region:
         return False
 
-    # AWS regions follow the pattern: us-east-1, eu-west-1, etc.
-    pattern = r"^[a-z]{2,3}-[a-z]+-\d+$"
-    return bool(re.match(pattern, region))
+    # Use the precompiled pattern with .match for efficiency.
+    return bool(_pattern.match(region))
 
 
 def build_neptune_config(
