@@ -46,29 +46,33 @@ class EvalConfig(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="allow")
 
     def to_dict(self) -> dict:
-        return {
-            "building_corpus_from_scratch": self.building_corpus_from_scratch,
-            "number_of_samples_in_corpus": self.number_of_samples_in_corpus,
-            "benchmark": self.benchmark,
-            "answering_questions": self.answering_questions,
-            "qa_engine": self.qa_engine,
-            "evaluating_answers": self.evaluating_answers,
-            "evaluating_contexts": self.evaluating_contexts,  # Controls whether context evaluation should be performed
-            "evaluation_engine": self.evaluation_engine,
-            "evaluation_metrics": self.evaluation_metrics,
-            "calculate_metrics": self.calculate_metrics,
-            "dashboard": self.dashboard,
-            "questions_path": self.questions_path,
-            "answers_path": self.answers_path,
-            "metrics_path": self.metrics_path,
-            "aggregate_metrics_path": self.aggregate_metrics_path,
-            "dashboard_path": self.dashboard_path,
-            "deepeval_model": self.deepeval_model,
-            "task_getter_type": self.task_getter_type,
-            "direct_llm_system_prompt": self.direct_llm_system_prompt,
-            "direct_llm_eval_prompt": self.direct_llm_eval_prompt,
-            "instance_filter": self.instance_filter,
-        }
+        # Use self.__dict__ directly for faster access and less attribute lookup overhead.
+        # Only include attribute keys required by the original mapping to preserve ordering and selection.
+        fields = [
+            "building_corpus_from_scratch",
+            "number_of_samples_in_corpus",
+            "benchmark",
+            "answering_questions",
+            "qa_engine",
+            "evaluating_answers",
+            "evaluating_contexts",
+            "evaluation_engine",
+            "evaluation_metrics",
+            "calculate_metrics",
+            "dashboard",
+            "questions_path",
+            "answers_path",
+            "metrics_path",
+            "aggregate_metrics_path",
+            "dashboard_path",
+            "deepeval_model",
+            "task_getter_type",
+            "direct_llm_system_prompt",
+            "direct_llm_eval_prompt",
+            "instance_filter",
+        ]
+        dct = self.__dict__
+        return {field: dct[field] for field in fields}
 
 
 @lru_cache
