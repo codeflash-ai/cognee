@@ -4,15 +4,18 @@ import traceback
 
 
 def wrap_in_async_handler(user_code: str) -> str:
-    return (
-        "import asyncio\n"
-        + "asyncio.set_event_loop(running_loop)\n\n"
-        + "from cognee.infrastructure.utils.run_sync import run_sync\n\n"
-        + "async def __user_main__():\n"
-        + "\n".join("    " + line for line in user_code.strip().split("\n"))
-        + "\n"
-        + "    globals().update(locals())\n\n"
-        + "run_sync(__user_main__(), running_loop)\n"
+    indented_lines = ["    " + line for line in user_code.strip().split("\n")]
+    return "".join(
+        [
+            "import asyncio\n"
+            + "asyncio.set_event_loop(running_loop)\n\n"
+            + "from cognee.infrastructure.utils.run_sync import run_sync\n\n"
+            + "async def __user_main__():\n",
+            "\n".join(indented_lines),
+            "\n"
+            + "    globals().update(locals())\n\n"
+            + "run_sync(__user_main__(), running_loop)\n",
+        ]
     )
 
 
