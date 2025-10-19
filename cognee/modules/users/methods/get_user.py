@@ -9,17 +9,14 @@ from ..models import User
 
 async def get_user(user_id: UUID):
     db_engine = get_relational_engine()
-
     async with db_engine.get_async_session() as session:
-        user = (
-            await session.execute(
-                select(User)
-                .options(selectinload(User.roles), selectinload(User.tenant))
-                .where(User.id == user_id)
-            )
-        ).scalar()
-
+        stmt = (
+            select(User)
+            .options(selectinload(User.roles), selectinload(User.tenant))
+            .where(User.id == user_id)
+        )
+        result = await session.execute(stmt)
+        user = result.scalar()
         if not user:
             raise EntityNotFoundError(message=f"Could not find user: {user_id}")
-
         return user
