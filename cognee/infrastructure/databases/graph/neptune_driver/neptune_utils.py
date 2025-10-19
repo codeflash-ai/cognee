@@ -10,6 +10,8 @@ from urllib.parse import urlparse
 
 from cognee.shared.logging_utils import get_logger
 
+_GRAPH_ID_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9\-]{0,62}$")
+
 logger = get_logger("NeptuneUtils")
 
 
@@ -75,8 +77,7 @@ def validate_graph_id(graph_id: str) -> bool:
 
     # Neptune Analytics graph IDs should be alphanumeric with hyphens
     # and between 1-63 characters
-    pattern = r"^[a-zA-Z0-9][a-zA-Z0-9\-]{0,62}$"
-    return bool(re.match(pattern, graph_id))
+    return bool(_GRAPH_ID_PATTERN.match(graph_id))
 
 
 def validate_aws_region(region: str) -> bool:
