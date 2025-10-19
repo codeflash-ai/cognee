@@ -182,15 +182,15 @@ def format_neptune_error(error: Exception) -> str:
     error_msg = str(error)
 
     # Common Neptune Analytics error patterns and their user-friendly messages
-    error_mappings = {
-        "AccessDenied": "Access denied. Please check your AWS credentials and permissions.",
-        "GraphNotFound": "Graph not found. Please verify the graph ID and region.",
-        "InvalidParameter": "Invalid parameter provided. Please check your request parameters.",
-        "ThrottlingException": "Request was throttled. Please retry with exponential backoff.",
-        "InternalServerError": "Internal server error occurred. Please try again later.",
-    }
+    error_mappings = (
+        ("AccessDenied", "Access denied. Please check your AWS credentials and permissions."),
+        ("GraphNotFound", "Graph not found. Please verify the graph ID and region."),
+        ("InvalidParameter", "Invalid parameter provided. Please check your request parameters."),
+        ("ThrottlingException", "Request was throttled. Please retry with exponential backoff."),
+        ("InternalServerError", "Internal server error occurred. Please try again later."),
+    )
 
-    for error_type, friendly_msg in error_mappings.items():
+    for error_type, friendly_msg in error_mappings:
         if error_type in error_msg:
             return f"{friendly_msg} Original error: {error_msg}"
 
