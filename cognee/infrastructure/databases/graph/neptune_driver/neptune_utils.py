@@ -10,6 +10,15 @@ from urllib.parse import urlparse
 
 from cognee.shared.logging_utils import get_logger
 
+DEFAULT_QUERY_TIMEOUT: int = 300  # 5 minutes
+
+DEFAULT_CONNECTION_CONFIG: Dict[str, Any] = {
+    "query_timeout": DEFAULT_QUERY_TIMEOUT,
+    "max_retries": 3,
+    "retry_delay": 1.0,
+    "preferred_query_language": "openCypher",
+}
+
 logger = get_logger("NeptuneUtils")
 
 
@@ -216,9 +225,4 @@ def get_default_connection_config() -> Dict[str, Any]:
     --------
         - Dict[str, Any]: Default connection configuration
     """
-    return {
-        "query_timeout": get_default_query_timeout(),
-        "max_retries": 3,
-        "retry_delay": 1.0,
-        "preferred_query_language": "openCypher",
-    }
+    return dict(DEFAULT_CONNECTION_CONFIG)
