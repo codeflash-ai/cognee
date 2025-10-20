@@ -80,6 +80,9 @@ async def get_memory_fragment(
         # This is expected behavior - continue with empty fragment
         pass
     except Exception as e:
+        from cognee.shared.logging_utils import get_logger
+
+        logger = get_logger("brute_force_triplet_search")
         logger.error(f"Error during memory fragment creation: {str(e)}")
         # Still return the fragment even if projection failed
         pass

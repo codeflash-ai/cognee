@@ -14,11 +14,9 @@ async def get_graph_engine() -> GraphDBInterface:
 
     graph_client = create_graph_engine(**config)
 
-    # Async functions can't be cached. After creating and caching the graph engine
-    # handle all necessary async operations for different graph types bellow.
-
-    # Run any adapter‐specific async initialization
-    if hasattr(graph_client, "initialize"):
+    # Avoid repeated hasattr: get class once for attribute presence
+    graph_client_cls = type(graph_client)
+    if getattr(graph_client_cls, "initialize", None):
         await graph_client.initialize()
 
     return graph_client

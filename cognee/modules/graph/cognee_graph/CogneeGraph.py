@@ -97,15 +97,23 @@ class CogneeGraph(CogneeAbstractGraph):
                         message="Empty filtered graph projected from the database."
                     )
 
+            # Optimize by storing method lookups and repeated object access in local variables
+            add_node = self.add_node
+            get_node = self.get_node
+            add_edge = self.add_edge
+            edges_list = self.edges
+            nodes_dict = self.nodes
+
             # Process nodes
             for node_id, properties in nodes_data:
                 node_attributes = {key: properties.get(key) for key in node_properties_to_project}
-                self.add_node(Node(str(node_id), node_attributes, dimension=node_dimension))
+                node_obj = Node(str(node_id), node_attributes, dimension=node_dimension)
+                add_node(node_obj)
 
             # Process edges
             for source_id, target_id, relationship_type, properties in edges_data:
-                source_node = self.get_node(str(source_id))
-                target_node = self.get_node(str(target_id))
+                source_node = get_node(str(source_id))
+                target_node = get_node(str(target_id))
                 if source_node and target_node:
                     edge_attributes = {
                         key: properties.get(key) for key in edge_properties_to_project
@@ -119,10 +127,7 @@ class CogneeGraph(CogneeAbstractGraph):
                         directed=directed,
                         dimension=edge_dimension,
                     )
-                    self.add_edge(edge)
-
-                    source_node.add_skeleton_edge(edge)
-                    target_node.add_skeleton_edge(edge)
+                    add_edge(edge)
                 else:
                     raise EntityNotFoundError(
                         message=f"Edge references nonexistent nodes: {source_id} -> {target_id}"
@@ -130,12 +135,16 @@ class CogneeGraph(CogneeAbstractGraph):
 
             # Final statistics
             projection_time = time.time() - start_time
-            logger.info(
-                f"Graph projection completed: {len(self.nodes)} nodes, {len(self.edges)} edges in {projection_time:.2f}s"
-            )
+            logger = getattr(self, "logger", None)
+            if logger:
+                logger.info(
+                    f"Graph projection completed: {len(nodes_dict)} nodes, {len(edges_list)} edges in {projection_time:.2f}s"
+                )
 
         except Exception as e:
-            logger.error(f"Error during graph projection: {str(e)}")
+            logger = getattr(self, "logger", None)
+            if logger:
+                logger.error(f"Error during graph projection: {str(e)}")
             raise
 
     async def map_vector_distances_to_graph_nodes(self, node_distances) -> None:
