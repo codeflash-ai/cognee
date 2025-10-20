@@ -546,10 +546,8 @@ async def _extract_local_files_with_hashes(
 async def _get_file_size(file_path: str) -> int:
     """Get file size in bytes."""
     try:
-        file_dir = os.path.dirname(file_path)
-        file_name = os.path.basename(file_path)
+        file_dir, file_name = os.path.split(file_path)
         file_storage = get_file_storage(file_dir)
-
         return await file_storage.get_size(file_name)
     except Exception:
         return 0
