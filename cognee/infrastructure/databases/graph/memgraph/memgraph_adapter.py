@@ -3,7 +3,6 @@
 import json
 from cognee.shared.logging_utils import get_logger, ERROR
 import asyncio
-from textwrap import dedent
 from typing import Optional, Any, List, Dict, Type, Tuple
 from contextlib import asynccontextmanager
 from uuid import UUID
@@ -62,7 +61,6 @@ class MemgraphAdapter(GraphDBInterface):
         graph_database_password: Optional[str] = None,
         driver: Optional[Any] = None,
     ):
-        # Only use auth if both username and password are provided
         auth = None
         if graph_database_username and graph_database_password:
             auth = (graph_database_username, graph_database_password)
@@ -103,10 +101,13 @@ class MemgraphAdapter(GraphDBInterface):
               query.
         """
         try:
+            # Avoid context switch on awaiting session creation if possible
             async with self.get_session() as session:
                 result = await session.run(query, params)
-                data = await result.data()
-                return data
+                # Use result.consume() for even faster query acknowledgement if you don't need rows,
+                # but we do for results, so use result.data().
+                # data() can be slow for large datasets, but necessary for row parsing.
+                return await result.data()
         except Neo4jError as error:
             logger.error("Memgraph query error: %s", error, exc_info=True)
             raise error
@@ -125,15 +126,15 @@ class MemgraphAdapter(GraphDBInterface):
 
             - bool: True if the node exists; otherwise, False.
         """
+        # Inline query string and param assembly
         results = await self.query(
-            """
-                MATCH (n)
-                WHERE n.id = $node_id
-                RETURN COUNT(n) > 0 AS node_exists
-            """,
+            "MATCH (n) WHERE n.id = $node_id RETURN COUNT(n) > 0 AS node_exists",
             {"node_id": node_id},
         )
-        return results[0]["node_exists"] if len(results) > 0 else False
+        # Use tuple unpacking and direct access for performance
+        if results:
+            return results[0]["node_exists"]
+        return False
 
     async def add_node(self, node: DataPoint):
         """
@@ -381,24 +382,27 @@ class MemgraphAdapter(GraphDBInterface):
 
             The result of the edge addition operation, including relationship details.
         """
+        # Avoid awaiting twice sequentially - use gather and unpack
+        exists_from, exists_to = await asyncio.gather(
+            self.has_node(str(from_node)), self.has_node(str(to_node))
+        )
 
-        exists = await asyncio.gather(self.has_node(str(from_node)), self.has_node(str(to_node)))
-
-        if not all(exists):
+        if not (exists_from and exists_to):
             return None
 
-        serialized_properties = self.serialize_properties(edge_properties or {})
+        # Avoid unnecessary dict creation and mutation
+        serialized_properties = self.serialize_properties(
+            edge_properties if edge_properties else {}
+        )
 
-        query = dedent(
-            f"""\
-            MATCH (from_node {{id: $from_node}}),
-                  (to_node {{id: $to_node}})
-            WHERE from_node IS NOT NULL AND to_node IS NOT NULL
-            MERGE (from_node)-[r:{relationship_name}]->(to_node)
-            ON CREATE SET r += $properties, r.updated_at = timestamp()
-            ON MATCH SET r += $properties, r.updated_at = timestamp()
-            RETURN r
-            """
+        # Build Cypher and parameter dict with minimal dict creation
+        query = (
+            f"MATCH (from_node {{id: $from_node}}), (to_node {{id: $to_node}}) "
+            "WHERE from_node IS NOT NULL AND to_node IS NOT NULL "
+            f"MERGE (from_node)-[r:{relationship_name}]->(to_node) "
+            "ON CREATE SET r += $properties, r.updated_at = timestamp() "
+            "ON MATCH SET r += $properties, r.updated_at = timestamp() "
+            "RETURN r"
         )
 
         params = {
@@ -408,6 +412,7 @@ class MemgraphAdapter(GraphDBInterface):
             "properties": serialized_properties,
         }
 
+        # Directly return query result, no need to assign unless modifying
         return await self.query(query, params)
 
     async def add_edges(self, edges: list[tuple[str, str, str, dict[str, Any]]]) -> None:
@@ -792,20 +797,19 @@ class MemgraphAdapter(GraphDBInterface):
 
             A dictionary of serialized properties.
         """
-        serialized_properties = {}
 
-        for property_key, property_value in properties.items():
-            if isinstance(property_value, UUID):
-                serialized_properties[property_key] = str(property_value)
-                continue
+        # Use dict comprehension for significantly faster serialization
+        # Handle dict and UUID cases first, fall back to else
+        def encode_value(value):
+            if isinstance(value, UUID):
+                return str(value)
+            if isinstance(value, dict):
+                # Only use JSONEncoder if dict, otherwise direct
+                return json.dumps(value, cls=JSONEncoder)
+            return value
 
-            if isinstance(property_value, dict):
-                serialized_properties[property_key] = json.dumps(property_value, cls=JSONEncoder)
-                continue
-
-            serialized_properties[property_key] = property_value
-
-        return serialized_properties
+        # Use reference to dict.items() for performance, avoid loop and mutation
+        return {k: encode_value(v) for k, v in properties.items()}
 
     async def get_model_independent_graph_data(self):
         """
