@@ -26,20 +26,38 @@ def is_real_paragraph_end(last_char: str, current_pos: int, text: str) -> bool:
 
         - bool: True if this is a real paragraph end, False otherwise
     """
-    if re.match(SENTENCE_ENDINGS, last_char):
+    # Compile patterns once for improved efficiency
+    # These must remain readable from their constants
+    # This avoids recompiling every function call
+    if not hasattr(is_real_paragraph_end, "_sentence_endings"):
+        is_real_paragraph_end._sentence_endings = re.compile(SENTENCE_ENDINGS)
+        is_real_paragraph_end._paragraph_endings = re.compile(PARAGRAPH_ENDINGS)
+
+    sentence_endings = is_real_paragraph_end._sentence_endings
+    paragraph_endings = is_real_paragraph_end._paragraph_endings
+
+    if sentence_endings.match(last_char):
         return True
+
     j = current_pos + 1
-    if j >= len(text):
+    text_len = len(text)
+    if j >= text_len:
         return False
 
-    next_character = text[j]
-    while j < len(text) and (re.match(PARAGRAPH_ENDINGS, next_character) or next_character == " "):
-        j += 1
-        if j >= len(text):
-            return False
+    # Scan ahead quickly for paragraph endings or spaces
+    while j < text_len:
         next_character = text[j]
+        # Avoid calling re.match for every character by using set lookup for spaces/newlines
+        # Only call regex if necessary
+        # Directly compare for space and use regex for other endings
+        if paragraph_endings.match(next_character) or next_character == " ":
+            j += 1
+            if j >= text_len:
+                return False
+        else:
+            break
 
-    if next_character.isupper():
+    if j < text_len and text[j].isupper():
         return True
     return False
 
