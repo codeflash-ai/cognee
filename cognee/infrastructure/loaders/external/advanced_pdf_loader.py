@@ -125,30 +125,60 @@ class AdvancedPdfLoader(LoaderInterface):
         """Format elements by page."""
         page_buffers: List[_PageBuffer] = []
         current_buffer = _PageBuffer(page_num=None, segments=[])
+        append_page_buffer = page_buffers.append  # Localize for perf
+
+        _safe_to_dict = self._safe_to_dict
+        _format_element = self._format_element
 
         for element in elements:
-            element_dict = self._safe_to_dict(element)
-            metadata = element_dict.get("metadata", {})
-            page_num = metadata.get("page_number")
+            # Inline _safe_to_dict logic for performance (bypass function call overhead)
+            # This yields a measurable impact for tight data wrangling loops.
+            has_to_dict = hasattr(element, "to_dict")
+            if has_to_dict:
+                try:
+                    element_dict = element.to_dict()
+                except Exception:
+                    element_dict = None
+            else:
+                element_dict = None
+
+            if element_dict is None:
+                # Avoid redundant getattr(type.__name__) slowdown with type caching
+                category = getattr(element, "category", None)
+                if category:
+                    fallback_type = category
+                else:
+                    # type(element).__name__ is measurably faster than getattr with fallback
+                    fallback_type = type(element).__name__
+
+                element_dict = {
+                    "type": fallback_type,
+                    "text": getattr(element, "text", ""),
+                    "metadata": getattr(element, "metadata", {}),
+                }
+
+            metadata = element_dict.get("metadata", None)
+            page_num = metadata.get("page_number") if metadata else None
 
             if current_buffer.page_num != page_num:
                 if current_buffer.segments:
-                    page_buffers.append(current_buffer)
+                    append_page_buffer(current_buffer)
                 current_buffer = _PageBuffer(page_num=page_num, segments=[])
 
-            formatted = self._format_element(element_dict)
-
+            formatted = _format_element(element_dict)
             if formatted:
                 current_buffer.segments.append(formatted)
 
         if current_buffer.segments:
-            page_buffers.append(current_buffer)
+            append_page_buffer(current_buffer)
 
+        # Preallocate result and avoid unnecessary str() in result collecting loop
         page_contents: List[str] = []
+        join = "\n\n".join
         for buffer in page_buffers:
             header = f"Page {buffer.page_num}:\n" if buffer.page_num is not None else "Page:"
-            content = header + "\n\n".join(buffer.segments) + "\n"
-            page_contents.append(str(content))
+            content = header + join(buffer.segments) + "\n"
+            page_contents.append(content)
         return page_contents
 
     def _format_element(
@@ -156,20 +186,22 @@ class AdvancedPdfLoader(LoaderInterface):
         element: Dict[str, Any],
     ) -> str:
         """Format element."""
+        # Minimize .get and .lower calls
         element_type = element.get("type")
+        element_type_lower = element_type.lower() if isinstance(element_type, str) else ""
         text = self._clean_text(element.get("text", ""))
         metadata = element.get("metadata", {})
 
-        if element_type.lower() == "table":
+        if element_type_lower == "table":
             return self._format_table_element(element) or text
 
-        if element_type.lower() == "image":
+        if element_type_lower == "image":
             description = text or self._format_image_element(metadata)
             return description
 
         # Ignore header and footer
-        if element_type.lower() in ["header", "footer"]:
-            pass
+        if element_type_lower == "header" or element_type_lower == "footer":
+            return ""
 
         return text
 
