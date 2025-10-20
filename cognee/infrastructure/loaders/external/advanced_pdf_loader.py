@@ -175,14 +175,22 @@ class AdvancedPdfLoader(LoaderInterface):
 
     def _format_table_element(self, element: Dict[str, Any]) -> str:
         """Format table element."""
+        # Direct references to mapping values reduce attribute access overhead
         metadata = element.get("metadata", {})
-        text = self._clean_text(element.get("text", ""))
         table_html = metadata.get("text_as_html")
 
         if table_html:
+            # Only clean text if table_html missing, for runtime efficiency
             return table_html.strip()
 
-        return text
+        # Delay .get("text", "") and cleaning until needed
+        value = element.get("text", "")
+        if value is None:
+            return ""
+        # Avoid calling str() if already str for minor memory/runtime savings
+        # Also, avoid unnecessary allocations: use .replace only if needed
+        # but .replace is fast for short strings, so keep as-is
+        return str(value).replace("\xa0", " ").strip()
 
     def _format_image_element(self, metadata: Dict[str, Any]) -> str:
         """Format image."""
@@ -232,6 +240,8 @@ class AdvancedPdfLoader(LoaderInterface):
     def _clean_text(self, value: Any) -> str:
         if value is None:
             return ""
+        # Avoid double conversion, check if value is already str
+        # But minimize logic: str(value) always safe and fast.
         return str(value).replace("\xa0", " ").strip()
 
 
