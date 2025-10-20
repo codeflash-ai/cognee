@@ -102,9 +102,16 @@ class MemgraphAdapter(GraphDBInterface):
             - List[Dict[str, Any]]: A list of dictionaries representing the result set of the
               query.
         """
+        # Minor speedup: Use local variable for self.get_session to avoid repeated attribute lookup
+        get_session = self.get_session
         try:
-            async with self.get_session() as session:
-                result = await session.run(query, params)
+            async with get_session() as session:
+                # Minor optimization: Skip dict allocation for params if None
+                if params:
+                    result = await session.run(query, params)
+                else:
+                    result = await session.run(query)
+                # result.data() is likely fast; no optimization needed
                 data = await result.data()
                 return data
         except Neo4jError as error:
@@ -966,22 +973,25 @@ class MemgraphAdapter(GraphDBInterface):
 
             A string containing unique relationship types.
         """
+        # Minimize temporary objects by referencing directly
         relationship_types_query = (
             "MATCH ()-[r]->() RETURN collect(DISTINCT type(r)) AS relationships;"
         )
+        # Direct result assignment, no optimization needed, already efficient
         relationship_types_result = await self.query(relationship_types_query)
-        relationship_types = (
-            relationship_types_result[0]["relationships"] if relationship_types_result else []
-        )
+        if relationship_types_result:
+            relationship_types = relationship_types_result[0]["relationships"]
+        else:
+            relationship_types = []
 
         if not relationship_types:
             raise ValueError("No relationship types found in the database.")
 
-        relationship_types_undirected_str = (
-            "{"
-            + ", ".join(f"{rel}" + ": {orientation: 'UNDIRECTED'}" for rel in relationship_types)
-            + "}"
-        )
+        # Preallocate string components for join to reduce intermediate string operations
+        # The use of generator expression in join is already memory efficient,
+        # but using a list comprehension is marginally faster for short lists.
+        rel_items = [f"{rel}: {{orientation: 'UNDIRECTED'}}" for rel in relationship_types]
+        relationship_types_undirected_str = "{" + ", ".join(rel_items) + "}"
         return relationship_types_undirected_str
 
     async def get_graph_metrics(self, include_optional=False):
