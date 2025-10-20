@@ -3,6 +3,7 @@ from typing import BinaryIO
 from contextlib import asynccontextmanager
 
 from .storage import Storage
+import asyncio
 
 
 class StorageManager:
@@ -20,6 +21,14 @@ class StorageManager:
 
     def __init__(self, storage: Storage):
         self.storage = storage
+        # Precompute if file_exists is async (useful in file_exists dispatch)
+        self._is_async_file_exists = inspect.iscoroutinefunction(
+            getattr(self.storage, "file_exists", None)
+        )
+        # Determine if storage.open returns an async context manager
+        # Use class identity, but store this ONCE and not per-call
+        # S3FileStorage.open is async contextmanager, others are sync
+        self._async_open_backend = self.storage.__class__.__name__ == "S3FileStorage"
 
     async def file_exists(self, file_path: str):
         """
@@ -35,10 +44,11 @@ class StorageManager:
 
             - bool: True if the file exists, otherwise False.
         """
-        if inspect.iscoroutinefunction(self.storage.file_exists):
+        if self._is_async_file_exists:
             return await self.storage.file_exists(file_path)
         else:
-            return self.storage.file_exists(file_path)
+            # Use to_thread to avoid blocking event loop on sync backends
+            return await asyncio.to_thread(self.storage.file_exists, file_path)
 
     async def is_file(self, file_path: str):
         if inspect.iscoroutinefunction(self.storage.is_file):
@@ -88,16 +98,24 @@ class StorageManager:
 
             Returns the retrieved data, as defined by the storage implementation.
         """
-        # Check the actual storage type by class name to determine if open() is async or sync
-
-        if self.storage.__class__.__name__ == "S3FileStorage":
+        if self._async_open_backend:
             # S3FileStorage.open() is async
             async with self.storage.open(file_path, *args, **kwargs) as file:
                 yield file
         else:
-            # LocalFileStorage.open() is sync
-            with self.storage.open(file_path, *args, **kwargs) as file:
+            # LocalFileStorage.open() is sync and must be delegated to a thread for file I/O
+            def _sync_open_cm():
+                with self.storage.open(file_path, *args, **kwargs) as file:
+                    return file
+
+            # asynccontextmanager requires async yield
+            file = await asyncio.to_thread(_sync_open_cm)
+            try:
                 yield file
+            finally:
+                # Ensure file is closed if not automatically handled by CM when threaded out
+                if hasattr(file, "close") and callable(file.close):
+                    await asyncio.to_thread(file.close)
 
     async def ensure_directory_exists(self, directory_path: str = ""):
         """
