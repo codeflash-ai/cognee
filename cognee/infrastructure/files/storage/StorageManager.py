@@ -20,6 +20,8 @@ class StorageManager:
 
     def __init__(self, storage: Storage):
         self.storage = storage
+        # Cache coroutine status for backend's get_size
+        self._is_async_get_size = inspect.iscoroutinefunction(storage.get_size)
 
     async def file_exists(self, file_path: str):
         """
@@ -47,7 +49,7 @@ class StorageManager:
             return self.storage.is_file(file_path)
 
     async def get_size(self, file_path: str) -> int:
-        if inspect.iscoroutinefunction(self.storage.get_size):
+        if self._is_async_get_size:
             return await self.storage.get_size(file_path)
         else:
             return self.storage.get_size(file_path)
