@@ -20,6 +20,10 @@ class StorageManager:
 
     def __init__(self, storage: Storage):
         self.storage = storage
+        # Memoize coroutine method check for ensure_directory_exists
+        self._ensure_is_coroutine = inspect.iscoroutinefunction(
+            self.storage.ensure_directory_exists
+        )
 
     async def file_exists(self, file_path: str):
         """
@@ -110,7 +114,7 @@ class StorageManager:
 
             - directory_path (str): The path of the directory to check or create.
         """
-        if inspect.iscoroutinefunction(self.storage.ensure_directory_exists):
+        if self._ensure_is_coroutine:
             return await self.storage.ensure_directory_exists(directory_path)
         else:
             return self.storage.ensure_directory_exists(directory_path)
