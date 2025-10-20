@@ -92,7 +92,14 @@ class StorageAwareCache:
 
         try:
             async with self.storage_manager.open(version_file, "r") as f:
-                cached_version = (await asyncio.to_thread(f.read)).strip()
+                # Use async read if available; else to_thread
+                read_fn = getattr(f, "read", None)
+                # Check if read is coroutinefunction (async)
+                if inspect.iscoroutinefunction(read_fn):
+                    content = await read_fn()
+                else:
+                    content = await asyncio.to_thread(read_fn)
+                cached_version = content.strip()
                 return cached_version == version_or_hash
         except Exception as e:
             logger.debug(f"Error checking cache validity: {e}")
