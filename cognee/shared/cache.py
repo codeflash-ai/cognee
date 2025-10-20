@@ -17,6 +17,7 @@ from cognee.base_config import get_base_config
 from cognee.infrastructure.files.storage.get_file_storage import get_file_storage
 from cognee.infrastructure.files.storage.StorageManager import StorageManager
 from cognee.shared.utils import create_secure_ssl_context
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -39,21 +40,27 @@ class StorageAwareCache:
         self.storage_manager: StorageManager = get_file_storage(
             self.base_config.cache_root_directory
         )
-
-        # Print absolute path
+        # Compute absolute path once to avoid repeated dynamic imports
         storage_path = self.storage_manager.storage.storage_path
         if storage_path.startswith("s3://"):
             absolute_path = storage_path  # S3 paths are already absolute
         else:
-            import os
-
             absolute_path = os.path.abspath(storage_path)
         logger.info(f"Storage manager absolute path: {absolute_path}")
 
     async def get_cache_dir(self) -> str:
         """Get the base cache directory path."""
-        cache_path = self.cache_base_path or "."  # Use "." for root when cache_base_path is empty
+        # The logic here is the main bottleneck due to `ensure_directory_exists`.
+        # We minimize redundant work by caching the ensure-directory operation.
+        # We use a per-instance flag to record initialization.
+        try:
+            if self._directory_initialized:  # type: ignore
+                return self.cache_base_path or "."
+        except AttributeError:
+            pass
+        cache_path = self.cache_base_path or "."
         await self.storage_manager.ensure_directory_exists(cache_path)
+        self._directory_initialized = True
         return cache_path
 
     async def get_cache_subdir(self, name: str) -> str:
