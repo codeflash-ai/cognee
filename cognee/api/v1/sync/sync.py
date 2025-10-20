@@ -25,6 +25,9 @@ from cognee.modules.sync.methods import (
 )
 from cognee.shared.utils import create_secure_ssl_context
 
+# Cache the environment lookup to avoid repeated os.getenv calls
+_CLOUD_AUTH_TOKEN: str = os.getenv("COGNEE_CLOUD_AUTH_TOKEN", "your-auth-token")
+
 logger = get_logger("sync")
 
 
@@ -562,7 +565,7 @@ async def _get_cloud_base_url() -> str:
 
 async def _get_cloud_auth_token(user: User) -> str:
     """Get authentication token for Cognee Cloud API."""
-    return os.getenv("COGNEE_CLOUD_AUTH_TOKEN", "your-auth-token")
+    return _CLOUD_AUTH_TOKEN
 
 
 async def _check_hashes_diff(
