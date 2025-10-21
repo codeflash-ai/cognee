@@ -23,6 +23,9 @@ class TikTokenTokenizer(TokenizerInterface):
         else:
             # Use default if model not provided
             self.tokenizer = tiktoken.get_encoding("cl100k_base")
+        # Prebind decode function for speed
+        self._decode_bytes = self.tokenizer.decode_single_token_bytes
+        self._decode_utf8 = bytes.decode  # fast-path reference
 
     def extract_tokens(self, text: str) -> List[Any]:
         """
@@ -74,7 +77,8 @@ class TikTokenTokenizer(TokenizerInterface):
 
             The decoded text representation of the token.
         """
-        return self.tokenizer.decode_single_token_bytes(token).decode("utf-8", errors="replace")
+        # Fast-path function references bound in __init__
+        return self._decode_utf8(self._decode_bytes(token), "utf-8", "replace")
 
     def count_tokens(self, text: str) -> int:
         """
