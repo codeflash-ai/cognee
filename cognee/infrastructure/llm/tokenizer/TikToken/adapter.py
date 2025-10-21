@@ -58,7 +58,8 @@ class TikTokenTokenizer(TokenizerInterface):
         """
         if not isinstance(tokens, list):
             tokens = [tokens]
-        return [self.tokenizer.decode(i) for i in tokens]
+        decode = self.tokenizer.decode
+        return list(map(decode, tokens))
 
     def decode_single_token(self, token: int):
         """
