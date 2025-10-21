@@ -1,3 +1,8 @@
+_ALLOWED_TEXT_BYTES = set(range(0x20, 0x7F)).union({0x0A, 0x0D, 0x09})
+
+_NON_TEXT_TRANS = bytes(byte if byte not in _ALLOWED_TEXT_BYTES else 0 for byte in range(256))
+
+
 def is_text_content(content):
     """
     Determine if the content is text-based.
@@ -33,7 +38,7 @@ def is_text_content(content):
         return True
 
     # Check for ASCII characters
-    if all(0x20 <= byte <= 0x7E or byte in (b"\n", b"\r", b"\t") for byte in content):
+    if not content.translate(_NON_TEXT_TRANS).strip(b"\x00"):
         return True
 
     # Check for common line break characters
