@@ -6,6 +6,8 @@ from typing import BinaryIO, Union
 from ..storage import get_file_storage
 from ..exceptions import FileContentHashingError
 
+_READ_CHUNK_SIZE = 65536
+
 
 async def get_file_content_hash(file_obj: Union[str, BinaryIO]) -> str:
     h = hashlib.md5()
@@ -22,15 +24,15 @@ async def get_file_content_hash(file_obj: Union[str, BinaryIO]) -> str:
 
             async with file_storage.open(file_name, "rb") as file:
                 while True:
-                    # Reading is buffered, so we can read smaller chunks.
-                    chunk = file.read(h.block_size)
+                    # Use large buffer for much more efficient file reads
+                    chunk = file.read(_READ_CHUNK_SIZE)
                     if not chunk:
                         break
                     h.update(chunk)
         else:
             while True:
-                # Reading is buffered, so we can read smaller chunks.
-                chunk = file_obj.read(h.block_size)
+                # Use large buffer for much more efficient file reads
+                chunk = file_obj.read(_READ_CHUNK_SIZE)
                 if not chunk:
                     break
                 h.update(chunk)
