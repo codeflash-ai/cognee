@@ -69,32 +69,34 @@ async def get_source_code_files(
             "cpp": [".cpp", ".c", ".h", ".hpp"],
         }
 
+    # Precompute extension-to-language mapping for fast lookup
+    ext_to_lang = {}
+    for lang, exts in language_config.items():
+        for ext in exts:
+            ext_to_lang[ext] = lang
+
     if not os.path.exists(repo_path):
         return []
 
     source_code_files = set()
+    excluded_paths = {Path(p).resolve() for p in (excluded_paths or [])}  # full paths
     for root, _, files in os.walk(repo_path):
+        root_path = Path(root).resolve()
+        root_parts = set(root_path.parts)  # same as before
+        # Check directory exclusions once per directory
+        if (EXCLUDED_DIRS & root_parts) or any(root_path.is_relative_to(p) for p in excluded_paths):
+            continue
+
         for file in files:
-            lang = _get_language_from_extension(file, language_config)
+            base_name, _ext = os.path.splitext(file)
+            lang = ext_to_lang.get(_ext)
             if lang is None:
                 continue
-            # Exclude tests, common build/venv directories and files provided in exclude_paths
-            excluded_dirs = EXCLUDED_DIRS
-            excluded_paths = {Path(p).resolve() for p in (excluded_paths or [])}  # full paths
-
-            root_path = Path(root).resolve()
-            root_parts = set(root_path.parts)  # same as before
-            base_name, _ext = os.path.splitext(file)
             if (
                 base_name.startswith("test_")
                 or base_name.endswith("_test")
                 or ".test." in file
                 or ".spec." in file
-                or (excluded_dirs & root_parts)  # name match
-                or any(
-                    root_path.is_relative_to(p)  # full-path match
-                    for p in excluded_paths
-                )
             ):
                 continue
             file_path = os.path.abspath(os.path.join(root, file))
