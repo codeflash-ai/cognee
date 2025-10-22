@@ -103,17 +103,25 @@ app.add_middleware(
 
 
 def custom_openapi():
-    if app.openapi_schema:
+    # Avoid redundant schema generation by using a fast early return
+    if app.openapi_schema is not None:
         return app.openapi_schema
 
+    # Cache commonly used values to local references to minimize global lookups
+    title = "Cognee API"
+    version = "1.0.0"
+    description = "Cognee API with Bearer token and Cookie auth"
+    routes = app.routes
+
     openapi_schema = get_openapi(
-        title="Cognee API",
-        version="1.0.0",
-        description="Cognee API with Bearer token and Cookie auth",
-        routes=app.routes,
+        title=title,
+        version=version,
+        description=description,
+        routes=routes,
     )
 
-    openapi_schema["components"]["securitySchemes"] = {
+    # Precompute components dicts before mutation for efficiency
+    security_schemes = {
         "BearerAuth": {"type": "http", "scheme": "bearer"},
         "CookieAuth": {
             "type": "apiKey",
@@ -121,6 +129,7 @@ def custom_openapi():
             "name": os.getenv("AUTH_TOKEN_COOKIE_NAME", "auth_token"),
         },
     }
+    openapi_schema["components"]["securitySchemes"] = security_schemes
 
     if REQUIRE_AUTHENTICATION:
         openapi_schema["security"] = [{"BearerAuth": []}, {"CookieAuth": []}]
@@ -129,7 +138,6 @@ def custom_openapi():
     # openapi_schema["security"] = [{"BearerAuth": []}, {"CookieAuth": []}]
 
     app.openapi_schema = openapi_schema
-
     return app.openapi_schema
 
 
