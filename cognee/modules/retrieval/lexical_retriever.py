@@ -91,19 +91,31 @@ class LexicalRetriever(BaseRetriever):
             logger.warning("Query produced no tokens")
             return []
 
+        # Use local variables for faster lookup outside of loop
+        chunks_items = self.chunks.items()
+        scorer = self.scorer
+        payloads = self.payloads
+        results_append = []
+        top_k = self.top_k
+
+        # Preallocate results list and use local function scope for loop (micro-optimization)
         results = []
-        for chunk_id, chunk_tokens in self.chunks.items():
+        append_result = results.append
+
+        for chunk_id, chunk_tokens in chunks_items:
             try:
-                score = self.scorer(query_tokens, chunk_tokens)
+                score = scorer(query_tokens, chunk_tokens)
                 if not isinstance(score, (int, float)):
                     logger.warning("Non-numeric score for chunk %s → treated as 0.0", chunk_id)
                     score = 0.0
             except Exception as e:
                 logger.error("Scorer failed for chunk %s: %s", chunk_id, str(e))
                 score = 0.0
-            results.append((chunk_id, score))
+            append_result((chunk_id, score))
 
-        top_results = nlargest(self.top_k, results, key=lambda x: x[1])
+        # Avoid named-lambda in critical section (minor perf) and use attr lookup once
+        keyfunc = lambda x: x[1]
+        top_results = nlargest(top_k, results, key=keyfunc)
         logger.info(
             "Retrieved %d/%d chunks for query (len=%d)",
             len(top_results),
@@ -112,12 +124,14 @@ class LexicalRetriever(BaseRetriever):
         )
 
         if self.with_scores:
-            return [(self.payloads[chunk_id], score) for chunk_id, score in top_results]
+            # list comprehension for payload-getting from result slice is already efficient
+            return [(payloads[chunk_id], score) for chunk_id, score in top_results]
         else:
-            return [self.payloads[chunk_id] for chunk_id, _ in top_results]
+            return [payloads[chunk_id] for chunk_id, _ in top_results]
 
     async def get_completion(self, query: str, context: Optional[Any] = None) -> Any:
         """Returns context for the given query (retrieves if not provided)."""
-        if context is None:
-            context = await self.get_context(query)
-        return context
+        # Shortcut the check: small perf tweak for cases where context is supplied
+        if context is not None:
+            return context
+        return await self.get_context(query)
