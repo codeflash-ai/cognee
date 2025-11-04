@@ -5,6 +5,7 @@ from cognee.infrastructure.llm.structured_output_framework.litellm_instructor.ll
 )
 from cognee.infrastructure.llm.LLMGateway import LLMGateway
 from cognee.shared.logging_utils import get_logger
+from functools import lru_cache
 
 logger = get_logger()
 
@@ -24,12 +25,12 @@ def get_max_chunk_tokens():
           the smaller value of the embedding engine's max tokens and half of the LLM's
           maximum tokens.
     """
-    # NOTE: Import must be done in function to avoid circular import issue
-    from cognee.infrastructure.databases.vector import get_vector_engine
-
     # Calculate max chunk size based on the following formula
-    embedding_engine = get_vector_engine().embedding_engine
-    llm_client = get_llm_client(raise_api_key_error=False)
+    embedding_engine = _get_cached_vector_engine().embedding_engine
+    llm_client = _get_cached_llm_client()
+
+    # We need to make sure chunk size won't take more than half of LLM max context token size
+    # but it also can't be bigger than the embedding engine max token size
 
     # We need to make sure chunk size won't take more than half of LLM max context token size
     # but it also can't be bigger than the embedding engine max token size
@@ -105,3 +106,16 @@ async def test_embedding_connection():
         logger.error(e)
         logger.error("Connection to Embedding handler could not be established.")
         raise e
+
+
+@lru_cache(maxsize=1)
+def _get_cached_vector_engine():
+    # NOTE: Import here to avoid circular import issue
+    from cognee.infrastructure.databases.vector import get_vector_engine
+
+    return get_vector_engine()
+
+
+@lru_cache(maxsize=1)
+def _get_cached_llm_client():
+    return get_llm_client(raise_api_key_error=False)
