@@ -10,9 +10,16 @@ async def run_async(func, *args, loop=None, executor=None, **kwargs):
         except RuntimeError:
             loop = asyncio.get_event_loop()
 
-    if "loop" in inspect.signature(func).parameters:
-        pfunc = partial(func, *args, loop=loop, **kwargs)
+    func_code = getattr(func, "__code__", None)
+    if func_code is not None and func_code.co_varnames:
+        if "loop" in func_code.co_varnames[: func_code.co_argcount]:
+            pfunc = partial(func, *args, loop=loop, **kwargs)
+        else:
+            pfunc = partial(func, *args, **kwargs)
     else:
-        pfunc = partial(func, *args, **kwargs)
+        if "loop" in inspect.signature(func).parameters:
+            pfunc = partial(func, *args, loop=loop, **kwargs)
+        else:
+            pfunc = partial(func, *args, **kwargs)
 
     return await loop.run_in_executor(executor, pfunc)
