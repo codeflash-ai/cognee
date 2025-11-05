@@ -35,7 +35,7 @@ from .neo4j_metrics_utils import (
 from .deadlock_retry import deadlock_retry
 
 
-logger = get_logger("Neo4jAdapter")
+logger = get_logger(__name__)
 
 BASE_LABEL = "__Node__"
 
@@ -60,7 +60,6 @@ class Neo4jAdapter(GraphDBInterface):
         if graph_database_username and graph_database_password:
             auth = (graph_database_username, graph_database_password)
         elif graph_database_username or graph_database_password:
-            logger = get_logger(__name__)
             logger.warning("Neo4j credentials incomplete – falling back to anonymous connection.")
         self.graph_database_name = graph_database_name
         self.driver = driver or AsyncGraphDatabase.driver(
@@ -111,8 +110,7 @@ class Neo4jAdapter(GraphDBInterface):
         try:
             async with self.get_session() as session:
                 result = await session.run(query, parameters=params)
-                data = await result.data()
-                return data
+                return await result.data()
         except Neo4jError as error:
             logger.error("Neo4j query error: %s", error, exc_info=True)
             raise error
@@ -589,35 +587,22 @@ class Neo4jAdapter(GraphDBInterface):
             - list[str]: A list of predecessor node IDs.
         """
         if edge_label is not None:
-            query = f"""
-            MATCH (node: `{BASE_LABEL}`)<-[r:`{edge_label}`]-(predecessor)
-            WHERE node.id = $node_id
-            RETURN predecessor
-            """
-
-            results = await self.query(
-                query,
-                dict(
-                    node_id=node_id,
-                ),
+            query = (
+                "MATCH (node: `__Node__`)<-[r:`" + edge_label + "`]-(predecessor)\n"
+                "WHERE node.id = $node_id\n"
+                "RETURN predecessor"
             )
-
-            return [result["predecessor"] for result in results]
         else:
-            query = f"""
-            MATCH (node: `{BASE_LABEL}`)<-[r]-(predecessor)
-            WHERE node.id = $node_id
-            RETURN predecessor
-            """
-
-            results = await self.query(
-                query,
-                dict(
-                    node_id=node_id,
-                ),
+            query = (
+                "MATCH (node: `__Node__`)<-[r]-(predecessor)\n"
+                "WHERE node.id = $node_id\n"
+                "RETURN predecessor"
             )
 
-            return [result["predecessor"] for result in results]
+        results = await self.query(query, {"node_id": node_id})
+
+        # Use list comprehension directly for speed, avoiding unnecessary intermediate allocations
+        return [result["predecessor"] for result in results]
 
     async def get_successors(self, node_id: str, edge_label: str = None) -> list[str]:
         """
