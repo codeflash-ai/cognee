@@ -1,6 +1,11 @@
 from os import path
-from cognee.shared.logging_utils import get_logger, ERROR
+
 from cognee.root_dir import get_absolute_path
+from cognee.shared.logging_utils import ERROR, get_logger
+
+_DEFAULT_PROMPT_DIR = get_absolute_path("./infrastructure/llm/prompts")
+
+_LOGGER = get_logger(level=ERROR)
 
 
 def read_query_prompt(prompt_file_name: str, base_directory: str = None):
@@ -25,19 +30,18 @@ def read_query_prompt(prompt_file_name: str, base_directory: str = None):
         Returns the contents of the prompt file as a string, or None if the file cannot be
         read due to an error.
     """
-    logger = get_logger(level=ERROR)
 
     try:
         if base_directory is None:
-            base_directory = get_absolute_path("./infrastructure/llm/prompts")
+            base_directory = _DEFAULT_PROMPT_DIR
 
         file_path = path.join(base_directory, prompt_file_name)
 
         with open(file_path, "r", encoding="utf-8") as file:
             return file.read()
     except FileNotFoundError:
-        logger.error(f"Error: Prompt file not found. Attempted to read: {file_path}")
+        _LOGGER.error(f"Error: Prompt file not found. Attempted to read: {file_path}")
         return None
     except Exception as e:
-        logger.error(f"An error occurred: {e}")
+        _LOGGER.error(f"An error occurred: {e}")
         return None
