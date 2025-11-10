@@ -22,13 +22,17 @@ def serialize_data(data):
         The serialized representation of the input data, with datetime objects converted to
         ISO format and UUIDs to strings.
     """
-    if isinstance(data, dict):
-        return {key: serialize_data(value) for key, value in data.items()}
-    elif isinstance(data, list):
-        return [serialize_data(item) for item in data]
-    elif isinstance(data, datetime):
+    # Fast-path for common atomic types
+    if type(data) is datetime:
         return data.isoformat()  # Convert datetime to ISO 8601 string
-    elif isinstance(data, UUID):
+    elif type(data) is UUID:
         return str(data)
+    elif type(data) is dict:
+        # Avoid extra method lookups inside dict comprehension
+        items = data.items()
+        return {key: serialize_data(value) for key, value in items}
+    elif type(data) is list:
+        # Avoid generic isinstance for potential performance gain with large lists
+        return [serialize_data(item) for item in data]
     else:
         return data
