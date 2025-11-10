@@ -5,10 +5,11 @@ import sqlalchemy.exc
 from cognee.infrastructure.databases.relational import get_relational_engine
 from cognee.infrastructure.databases.exceptions import EntityNotFoundError
 from ..models import User
+from functools import lru_cache
 
 
 async def get_user(user_id: UUID):
-    db_engine = get_relational_engine()
+    db_engine = _get_relational_engine_cached()
 
     async with db_engine.get_async_session() as session:
         user = (
@@ -23,3 +24,8 @@ async def get_user(user_id: UUID):
             raise EntityNotFoundError(message=f"Could not find user: {user_id}")
 
         return user
+
+
+@lru_cache(maxsize=1)
+def _get_relational_engine_cached():
+    return get_relational_engine()

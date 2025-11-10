@@ -9,6 +9,7 @@ from cognee.infrastructure.databases.relational import get_relational_engine
 from cognee.modules.data.methods import get_unique_dataset_id
 from cognee.modules.users.models import DatasetDatabase
 from cognee.modules.users.models import User
+from functools import lru_cache
 
 
 async def get_or_create_dataset_database(
@@ -28,7 +29,7 @@ async def get_or_create_dataset_database(
     dataset : Union[str, UUID]
         Dataset being linked.
     """
-    db_engine = get_relational_engine()
+    db_engine = _get_relational_engine_cached()
 
     dataset_id = await get_unique_dataset_id(dataset, user)
 
@@ -36,10 +37,6 @@ async def get_or_create_dataset_database(
     graph_db_name = f"{dataset_id}.pkl"
 
     async with db_engine.get_async_session() as session:
-        # Create dataset if it doesn't exist
-        if isinstance(dataset, str):
-            dataset = await create_dataset(dataset, user, session)
-
         # Try to fetch an existing row first
         stmt = select(DatasetDatabase).where(
             DatasetDatabase.owner_id == user.id,
@@ -50,6 +47,12 @@ async def get_or_create_dataset_database(
             return existing
 
         # If there are no existing rows build a new row
+
+        # If it doesn't exist, create the Dataset if necessary (for string-named datasets)
+        if isinstance(dataset, str):
+            dataset = await create_dataset(dataset, user, session)
+
+        # Build and commit the new DatasetDatabase record
         record = DatasetDatabase(
             owner_id=user.id,
             dataset_id=dataset_id,
@@ -66,3 +69,8 @@ async def get_or_create_dataset_database(
         except IntegrityError:
             await session.rollback()
             raise
+
+
+@lru_cache(maxsize=1)
+def _get_relational_engine_cached():
+    return get_relational_engine()
