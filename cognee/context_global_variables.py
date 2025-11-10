@@ -8,6 +8,10 @@ from cognee.infrastructure.databases.utils import get_or_create_dataset_database
 from cognee.infrastructure.files.storage.config import file_storage_config
 from cognee.modules.users.methods import get_user
 
+_ENABLE_BACKEND_ACCESS_CONTROL = (
+    os.getenv("ENABLE_BACKEND_ACCESS_CONTROL", "false").lower() == "true"
+)
+
 # Note: ContextVar allows us to use different graph db configurations in Cognee
 #       for different async tasks, threads and processes
 vector_db_config = ContextVar("vector_db_config", default=None)
@@ -35,7 +39,7 @@ async def set_database_global_context_variables(dataset: Union[str, UUID], user_
 
     base_config = get_base_config()
 
-    if not os.getenv("ENABLE_BACKEND_ACCESS_CONTROL", "false").lower() == "true":
+    if not _ENABLE_BACKEND_ACCESS_CONTROL:
         return
 
     user = await get_user(user_id)
@@ -43,11 +47,11 @@ async def set_database_global_context_variables(dataset: Union[str, UUID], user_
     # To ensure permissions are enforced properly all datasets will have their own databases
     dataset_database = await get_or_create_dataset_database(dataset, user)
 
-    data_root_directory = os.path.join(
-        base_config.data_root_directory, str(user.tenant_id or user.id)
-    )
+    user_id_str = str(user.id)
+    tenant_id_or_id_str = str(user.tenant_id or user.id)
+    data_root_directory = os.path.join(base_config.data_root_directory, tenant_id_or_id_str)
     databases_directory_path = os.path.join(
-        base_config.system_root_directory, "databases", str(user.id)
+        base_config.system_root_directory, "databases", user_id_str
     )
 
     # Set vector and graph database configuration based on dataset database information
