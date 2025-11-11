@@ -6,6 +6,7 @@ from cognee.modules.retrieval.utils.completion import generate_completion
 from cognee.modules.retrieval.base_retriever import BaseRetriever
 from cognee.modules.retrieval.exceptions.exceptions import NoDataError
 from cognee.infrastructure.databases.vector.exceptions import CollectionNotFoundError
+from functools import lru_cache
 
 logger = get_logger("CompletionRetriever")
 
@@ -51,7 +52,7 @@ class CompletionRetriever(BaseRetriever):
             - str: A string containing the combined text of the retrieved document chunks, or an
               empty string if none are found.
         """
-        vector_engine = get_vector_engine()
+        vector_engine = _cached_get_vector_engine()
 
         try:
             found_chunks = await vector_engine.search("DocumentChunk_text", query, limit=self.top_k)
@@ -64,7 +65,6 @@ class CompletionRetriever(BaseRetriever):
             combined_context = "\n".join(chunks_payload)
             return combined_context
         except CollectionNotFoundError as error:
-            logger.error("DocumentChunk_text collection not found")
             raise NoDataError("No data found in the system, please add data first.") from error
 
     async def get_completion(self, query: str, context: Optional[Any] = None) -> str:
@@ -97,3 +97,8 @@ class CompletionRetriever(BaseRetriever):
             system_prompt=self.system_prompt,
         )
         return completion
+
+
+@lru_cache(maxsize=1)
+def _cached_get_vector_engine():
+    return get_vector_engine()
