@@ -1,17 +1,20 @@
 """This module contains utility functions for the cognee."""
 
-import os
-import ssl
-import requests
-from datetime import datetime, timezone
 import http.server
-import socketserver
-from threading import Thread
+import os
 import pathlib
+import socketserver
+import ssl
+from datetime import datetime, timezone
+from threading import Thread
 from uuid import uuid4
+
+import requests
 
 from cognee.base_config import get_base_config
 from cognee.infrastructure.databases.graph import get_graph_engine
+
+_SECURE_SSL_CONTEXT: ssl.SSLContext = ssl.create_default_context()
 
 
 # Analytics Proxy Url, currently hosted by Vercel
@@ -26,7 +29,7 @@ def create_secure_ssl_context() -> ssl.SSLContext:
     If users report SSL issues, I'm keeping this open in case we need to switch to:
         ssl.create_default_context(cafile=certifi.where())
     """
-    return ssl.create_default_context()
+    return _SECURE_SSL_CONTEXT
 
 
 def get_anonymous_id():
