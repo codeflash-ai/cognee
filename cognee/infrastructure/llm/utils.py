@@ -5,10 +5,12 @@ from cognee.infrastructure.llm.structured_output_framework.litellm_instructor.ll
 )
 from cognee.infrastructure.llm.LLMGateway import LLMGateway
 from cognee.shared.logging_utils import get_logger
+from functools import lru_cache
 
 logger = get_logger()
 
 
+@lru_cache
 def get_max_chunk_tokens():
     """
     Calculate the maximum number of tokens allowed in a chunk.

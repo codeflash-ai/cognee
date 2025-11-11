@@ -1,8 +1,10 @@
 from cognee.modules.ontology.base_ontology_resolver import BaseOntologyResolver
 from cognee.modules.ontology.rdf_xml.RDFLibOntologyResolver import RDFLibOntologyResolver
 from cognee.modules.ontology.matching_strategies import FuzzyMatchingStrategy
+from functools import lru_cache
 
 
+@lru_cache
 def get_default_ontology_resolver() -> BaseOntologyResolver:
     return RDFLibOntologyResolver(ontology_file=None, matching_strategy=FuzzyMatchingStrategy())
 
