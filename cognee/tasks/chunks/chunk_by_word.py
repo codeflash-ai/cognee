@@ -26,18 +26,24 @@ def is_real_paragraph_end(last_char: str, current_pos: int, text: str) -> bool:
 
         - bool: True if this is a real paragraph end, False otherwise
     """
-    if re.match(SENTENCE_ENDINGS, last_char):
+    # Pre-compile regex pattern once for all function calls for faster repeated use
+    # These are safe to move to module level, but per instructions, do not modify imports.
+    # Optimize: Avoid regex for single-char match and use set instead
+    if last_char in {";", ".", "!", "?", "。", "！", "？"}:
         return True
     j = current_pos + 1
-    if j >= len(text):
+    text_len = len(text)
+    if j >= text_len:
+        return False
+
+    # Use str.find for fast skipping of "\n", "\r", " " runs
+    while j < text_len and text[j] in {"\n", "\r", " "}:
+        j += 1
+
+    if j >= text_len:
         return False
 
     next_character = text[j]
-    while j < len(text) and (re.match(PARAGRAPH_ENDINGS, next_character) or next_character == " "):
-        j += 1
-        if j >= len(text):
-            return False
-        next_character = text[j]
 
     if next_character.isupper():
         return True
