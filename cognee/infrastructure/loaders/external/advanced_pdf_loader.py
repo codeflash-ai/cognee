@@ -126,8 +126,17 @@ class AdvancedPdfLoader(LoaderInterface):
         page_buffers: List[_PageBuffer] = []
         current_buffer = _PageBuffer(page_num=None, segments=[])
 
+        # Avoid repeatedly looking up .lower() and key compared to linear brute-force
+        # Use local var lookup for self._safe_to_dict and self._format_element for speed
+        _safe_to_dict = self._safe_to_dict
+        _format_element = self._format_element
+
+        append_page_buffer = page_buffers.append
+        append_segment = current_buffer.segments.append
+
+        # Exploit in-place appends and minimize attribute accesses in hot loop
         for element in elements:
-            element_dict = self._safe_to_dict(element)
+            element_dict = _safe_to_dict(element)
             metadata = element_dict.get("metadata", {})
             page_num = metadata.get("page_number")
 
@@ -135,20 +144,25 @@ class AdvancedPdfLoader(LoaderInterface):
                 if current_buffer.segments:
                     page_buffers.append(current_buffer)
                 current_buffer = _PageBuffer(page_num=page_num, segments=[])
+                append_segment = current_buffer.segments.append
 
-            formatted = self._format_element(element_dict)
+            formatted = _format_element(element_dict)
 
             if formatted:
-                current_buffer.segments.append(formatted)
+                append_segment(formatted)
 
         if current_buffer.segments:
             page_buffers.append(current_buffer)
 
         page_contents: List[str] = []
         for buffer in page_buffers:
-            header = f"Page {buffer.page_num}:\n" if buffer.page_num is not None else "Page:"
+            page_num = buffer.page_num
+            # Localize header formatting for slightly faster lookup
+            header = f"Page {page_num}:\n" if page_num is not None else "Page:"
+            # join is fast; make sure to not recompute str()
             content = header + "\n\n".join(buffer.segments) + "\n"
-            page_contents.append(str(content))
+            page_contents.append(content)
+
         return page_contents
 
     def _format_element(
@@ -157,19 +171,24 @@ class AdvancedPdfLoader(LoaderInterface):
     ) -> str:
         """Format element."""
         element_type = element.get("type")
+        # Avoid calling .lower() more than once
+        lower_type = element_type.lower() if element_type else ""
         text = self._clean_text(element.get("text", ""))
         metadata = element.get("metadata", {})
 
-        if element_type.lower() == "table":
-            return self._format_table_element(element) or text
+        # Map lower_type for hot path
+        if lower_type == "table":
+            formatted = self._format_table_element(element)
+            # Avoid evaluating text if formatted is truthy
+            return formatted if formatted else text
 
-        if element_type.lower() == "image":
-            description = text or self._format_image_element(metadata)
-            return description
+        if lower_type == "image":
+            # Only call self._format_image_element if text is falsy (short-circuit)
+            return text if text else self._format_image_element(metadata)
 
         # Ignore header and footer
-        if element_type.lower() in ["header", "footer"]:
-            pass
+        if lower_type in ("header", "footer"):
+            return text
 
         return text
 
@@ -214,19 +233,32 @@ class AdvancedPdfLoader(LoaderInterface):
 
     def _safe_to_dict(self, element: Any) -> Dict[str, Any]:
         """Safe to dict."""
-        try:
-            if hasattr(element, "to_dict"):
-                return element.to_dict()
-        except Exception:
-            pass
+        # MINOR: Move hasattr outside try/except to avoid handling attribute access errors as unlikely code paths
+        # This avoids the overhead of an unnecessary try/except in the common path
+
+        to_dict = getattr(element, "to_dict", None)
+        if callable(to_dict):
+            try:
+                return to_dict()
+            except Exception:
+                pass
+
+        # Optimize category retrieval
         fallback_type = getattr(element, "category", None)
         if not fallback_type:
-            fallback_type = getattr(element, "__class__", type("", (), {})).__name__
+            fallback_type = type(element).__name__
+
+        # Optimize direct attribute access for built-ins and C-extensions over getattr
+        # Use __dict__ if available for even faster reads
+        # However, must stay safe and behavioral-preserving - this is legacy compatibility code
+
+        text = getattr(element, "text", "")
+        metadata = getattr(element, "metadata", {})
 
         return {
             "type": fallback_type,
-            "text": getattr(element, "text", ""),
-            "metadata": getattr(element, "metadata", {}),
+            "text": text,
+            "metadata": metadata,
         }
 
     def _clean_text(self, value: Any) -> str:
