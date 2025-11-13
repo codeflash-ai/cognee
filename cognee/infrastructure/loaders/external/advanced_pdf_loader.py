@@ -188,28 +188,28 @@ class AdvancedPdfLoader(LoaderInterface):
         """Format image."""
         placeholder = "[Image omitted]"
         image_text = placeholder
-        coordinates = metadata.get("coordinates", {})
-        points = coordinates.get("points") if isinstance(coordinates, dict) else None
-        if points and isinstance(points, tuple) and len(points) == 4:
-            leftup = points[0]
-            rightdown = points[3]
+        coordinates = metadata.get("coordinates", None)  # Avoid unnecessary empty dict allocation
+        if (
+            isinstance(coordinates, dict)
+            and (points := coordinates.get("points"))
+            and isinstance(points, tuple)
+            and len(points) == 4
+        ):
+            leftup, _, _, rightdown = points
             if (
                 isinstance(leftup, tuple)
-                and isinstance(rightdown, tuple)
                 and len(leftup) == 2
+                and isinstance(rightdown, tuple)
                 and len(rightdown) == 2
             ):
                 image_text = f"{placeholder} (bbox=({leftup[0]}, {leftup[1]}, {rightdown[0]}, {rightdown[1]}))"
 
-            layout_width = coordinates.get("layout_width")
-            layout_height = coordinates.get("layout_height")
-            system = coordinates.get("system")
-            if layout_width and layout_height and system:
-                image_text = (
-                    image_text
-                    + f", system={system}, layout_width={layout_width}, layout_height={layout_height}))"
-                )
-
+                # Fetch all needed keys in one go to minimize dictionary lookups
+                layout_width = coordinates.get("layout_width")
+                layout_height = coordinates.get("layout_height")
+                system = coordinates.get("system")
+                if layout_width and layout_height and system:
+                    image_text = f"{image_text}, system={system}, layout_width={layout_width}, layout_height={layout_height}))"
         return image_text
 
     def _safe_to_dict(self, element: Any) -> Dict[str, Any]:
