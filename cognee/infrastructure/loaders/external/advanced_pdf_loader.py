@@ -176,13 +176,15 @@ class AdvancedPdfLoader(LoaderInterface):
     def _format_table_element(self, element: Dict[str, Any]) -> str:
         """Format table element."""
         metadata = element.get("metadata", {})
-        text = self._clean_text(element.get("text", ""))
         table_html = metadata.get("text_as_html")
 
         if table_html:
             return table_html.strip()
 
-        return text
+        text = element.get("text")
+        if text is None:
+            return ""
+        return (text if isinstance(text, str) else str(text)).replace("\xa0", " ").strip()
 
     def _format_image_element(self, metadata: Dict[str, Any]) -> str:
         """Format image."""
