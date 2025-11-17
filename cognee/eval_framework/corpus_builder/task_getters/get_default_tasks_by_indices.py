@@ -7,12 +7,14 @@ from cognee.tasks.storage import add_data_points
 from cognee.shared.data_models import KnowledgeGraph
 from cognee.modules.ontology.rdf_xml.RDFLibOntologyResolver import RDFLibOntologyResolver
 
+_default_tasks_cache = {}
+
 
 async def get_default_tasks_by_indices(
     indices: List[int], chunk_size: int = None, chunker=TextChunker
 ) -> List[Task]:
     """Returns default tasks filtered by the provided indices."""
-    all_tasks = await get_default_tasks(chunker=chunker, chunk_size=chunk_size)
+    all_tasks = await _memoized_get_default_tasks(chunk_size, chunker)
 
     if any(i < 0 or i >= len(all_tasks) for i in indices):
         raise IndexError(
@@ -57,3 +59,12 @@ async def get_just_chunks_tasks(
     add_data_points_task = Task(add_data_points, task_config={"batch_size": 10})
 
     return base_tasks + [add_data_points_task]
+
+
+async def _memoized_get_default_tasks(chunk_size, chunker):
+    key = (chunk_size, id(chunker))
+    if key in _default_tasks_cache:
+        return _default_tasks_cache[key]
+    tasks = await get_default_tasks(chunker=chunker, chunk_size=chunk_size)
+    _default_tasks_cache[key] = tasks
+    return tasks
