@@ -32,6 +32,8 @@ from cognee.tasks.temporal_graph.extract_knowledge_graph_from_events import (
     extract_knowledge_graph_from_events,
 )
 
+_MAX_CHUNK_TOKENS_CACHE = {}
+
 
 logger = get_logger("cognify")
 
@@ -256,12 +258,21 @@ async def get_default_tasks(  # TODO: Find out a better way to do this (Boris's 
                 "ontology_config": {"ontology_resolver": get_default_ontology_resolver()}
             }
 
+    # Resolve chunk size (cache expensive get_max_chunk_tokens execution)
+    if chunk_size is not None:
+        resolved_chunk_size = chunk_size
+    else:
+        # Memoize using _MAX_CHUNK_TOKENS_CACHE for the process lifetime
+        if "value" not in _MAX_CHUNK_TOKENS_CACHE:
+            _MAX_CHUNK_TOKENS_CACHE["value"] = get_max_chunk_tokens()
+        resolved_chunk_size = _MAX_CHUNK_TOKENS_CACHE["value"]
+
     default_tasks = [
         Task(classify_documents),
         Task(check_permissions_on_dataset, user=user, permissions=["write"]),
         Task(
             extract_chunks_from_documents,
-            max_chunk_size=chunk_size or get_max_chunk_tokens(),
+            max_chunk_size=resolved_chunk_size,
             chunker=chunker,
         ),  # Extract text chunks based on the document type.
         Task(
